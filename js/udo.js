@@ -7,6 +7,7 @@
 	var docs;
 	var gdocs;
 	var score = 0;
+	var scoreGlobal = 0;
 	var scoreText;
 	var docText;
 
@@ -18,6 +19,7 @@
 		game.udoExiting = false;
 		game.nowExit = false;
 		game.nextLevel = false;
+		score = 0;
 	}
 
 	function setupControls() {
@@ -33,6 +35,7 @@
 			game.load.image('udo-bg', 'assets/udo.png');
 		    game.load.image('sky', 'assets/sky.png');
 			game.load.image('daytime', 'assets/daytime.png');
+			game.load.image('night', 'assets/night.png');
 		    game.load.image('ground', 'assets/platform.png');
 		    game.load.image('doc', 'assets/doc.png');
 			game.load.image('exit', 'assets/exit.png');
@@ -69,7 +72,7 @@
 		}
 	};
 
-	function setupGameWorld(width, height, bgpic){
+	function setupGameWorld(width, height, bgpic, ledgeConf){
 
 		game.world.setBounds(0, 0, width, height);
 
@@ -86,20 +89,22 @@
 		platforms.enableBody = true;
 
 		// Here we create the ground.
-		var ground = platforms.create(0, game.world.height - 100, 'ground');
+		var ground = platforms.create(0, game.world.height - 50, 'ground');
 
 		//  Scale it to fit the width of the game (the original sprite is 400x32 in size)
-		ground.scale.setTo(2, 2);
+		var factor = width/400; // size of platform.png
+		ground.scale.setTo(factor, factor);
 
 		//  This stops it from falling away when you jump on it
 		ground.body.immovable = true;
 
-		//  Now let's create two ledges
-		var ledge = platforms.create(400, 400, 'ground');
-		ledge.body.immovable = true;
-
-		ledge = platforms.create(-150, 250, 'ground');
-		ledge.body.immovable = true;
+		//  Now let's create x ledges
+		var ledge;
+		for (var i = 0; i < ledgeConf.length; i++) {
+			var conf = ledgeConf[i];
+			ledge = platforms.create(conf.x, conf.y, conf.type);
+			ledge.body.immovable = true;
+		}
 	}
 
 	function setupUdo() {
@@ -122,7 +127,7 @@
 	}
 
 	function setupGate() {
-		gate = game.add.sprite(740, game.world.height - 160, 'gate');
+		gate = game.add.sprite(game.world.width - 60, game.world.height - 110, 'gate');
 		gate.animations.add('open', [1, 2, 3, 4], 100, false);
 		gate.frame = 0;
 		// To detect the collision with Udo at the end of the level
@@ -142,7 +147,7 @@
 		for (var i = 0; i < 5; i++)
 		{
 			//  Create a doc inside of the 'docs' group
-			var doc = docs.create(i * 160, 0, 'doc');
+			var doc = docs.create(i * (game.world.width/5.1), 0, 'doc');
 
 			//  Let gravity do its thing
 			doc.body.gravity.y = 300;
@@ -156,6 +161,8 @@
 		scoreText = game.add.text(16, 16, 'score: 0', {  font: '14px Quantico', fill: '#00ff00'});
 		docText = game.add.text(670, 16, '', {  font: '14px Quantico', fill: '#00ff00'});
 		docText.align = 'right';
+		scoreText.fixedToCamera = true;
+		docText.fixedToCamera = true;
 	}
 
 	function setupAudio() {
@@ -181,20 +188,20 @@
 		game.add.tween(docGhost).to({y:(doc.y)-50}, 150).start();
 
 		//  Add and update the score
-		score += 10;
-		scoreText.text = 'Score: ' + score;
+		score += 1;
+		scoreGlobal += 10;
+		scoreText.text = 'Score: ' + scoreGlobal;
 
-		var i = (score / 10) - 1;
-		if (i < docTitles.length) {
-			docText.text += docTitles[i] + '\n';
+		if (score <= docTitles.length) {
+			docText.text += docTitles[score-1] + '\n';
 		}
-		if (i == (docTitles.length-1)) {
+		if (score == docTitles.length) {
 			game.allDocsCollected = true;
 
 			gate.animations.play('open');
 			audioDoor.play();
 
-			exitLight = game.add.sprite(760, game.world.height - 180, 'exit');
+			exitLight = game.add.sprite((game.world.width-40), game.world.height - 130, 'exit');
 			exitLight.anchor.setTo(0.5);
 			game.add.tween(exitLight.scale).to({x : 0.5, y : 0.5},500,null,true,0,100,true);
 		}
@@ -209,15 +216,16 @@
 
 	function ifUdoMiddleDoor (player, gate) {
 		// Checks that Udo goes farther than the collision point
-		return ((735 < player.x) && (player.x < 745));
+		return (((game.world.width-65) < player.x) && (player.x < (game.world.width-55)));
 	}
 
 	function levelCompleted(){
 		//player.destroy();
 		audioBg.stop();
 		var style = { font: "90px Bangers", fill: "#ffffff", align: "center" };
-		var text = game.add.text(game.world.centerX, game.world.centerY, "Well done,\nUdo!", style);
+		var text = game.add.text(game.camera.position.x, game.camera.position.y, "Well done,\nUdo!", style);
 		text.anchor.set(0.5);
+		//text.fixedToCamera = true;
 		audioWin.play();
 		game.nextLevel = true;
 	}
@@ -226,10 +234,64 @@
 		game.camera.follow(player);
 	}
 
+	function updateRoutine() {
+		game.physics.arcade.collide(player, platforms);
+
+		if (!game.nowExit) {
+			//  Collide the player and the docs with the platforms
+			game.physics.arcade.collide(docs, platforms);
+
+			//  Checks to see if the player overlaps with any of the docs, if he does call the collectDoc function
+			game.physics.arcade.overlap(player, docs, collectDoc, null, this);
+
+			//game.physics.arcade.collide(player, gate);
+			game.physics.arcade.overlap(player, gate, endLevelCb, ifUdoMiddleDoor, this);
+
+			//  Reset the players velocity (movement)
+			player.body.velocity.x = 0;
+
+			//  Allow the player to jump if they are touching the ground.
+			if (cursors.up.isDown && player.body.touching.down)
+			{
+				player.body.velocity.y = -350;
+				audioJump.play();
+			}
+
+			if (cursors.left.isDown)
+			{
+				//  Move to the left
+				player.body.velocity.x = -150;
+				player.animations.play('left');
+			}
+			else if (cursors.right.isDown)
+			{
+				//  Move to the right
+				player.body.velocity.x = 150;
+				player.animations.play('right');
+			}
+			else
+			{
+				//  Stand still
+				player.animations.stop();
+				player.frame = 4;
+			}
+		}
+		else {
+			if(!game.udoExiting) {
+				player.animations.stop();
+				player.frame = 9;
+				var disappears = game.add.tween(player.scale).to({x:0.7, y:0.7}).start();
+				disappears.onComplete.addOnce(levelCompleted);
+				game.udoExiting = true;
+			}
+		}
+	}
+
 	var statePlay1 = {
 
 		create: function() {
-			setupGameWorld(800, 600, 'sky');
+			setupGameWorld(800, 600, 'sky', [{'x': -150, 'y': 250, 'type': "ground"},
+		                                     {'x':  400, 'y': 400, 'type': "ground"}]);
 		    setupGate();
 			setupUdo();
 			setupDocs();
@@ -240,61 +302,10 @@
 
 		update: function() {
 
-			game.physics.arcade.collide(player, platforms);
-
-			if (!game.nowExit) {
-				//  Collide the player and the docs with the platforms
-			    game.physics.arcade.collide(docs, platforms);
-
-			    //  Checks to see if the player overlaps with any of the docs, if he does call the collectDoc function
-			    game.physics.arcade.overlap(player, docs, collectDoc, null, this);
-
-				//game.physics.arcade.collide(player, gate);
-				game.physics.arcade.overlap(player, gate, endLevelCb, ifUdoMiddleDoor, this);
-
-			    //  Reset the players velocity (movement)
-			    player.body.velocity.x = 0;
-
-				//  Allow the player to jump if they are touching the ground.
-			    if (cursors.up.isDown && player.body.touching.down)
-			    {
-			        player.body.velocity.y = -350;
-					audioJump.play();
-			    }
-
-			    if (cursors.left.isDown)
-			    {
-			        //  Move to the left
-			        player.body.velocity.x = -150;
-			        player.animations.play('left');
-			    }
-			    else if (cursors.right.isDown)
-			    {
-			        //  Move to the right
-			        player.body.velocity.x = 150;
-			        player.animations.play('right');
-			    }
-			    else
-			    {
-			        //  Stand still
-			        player.animations.stop();
-			        player.frame = 4;
-			    }
-			}
-			else {
-				if(!game.udoExiting) {
-					player.animations.stop();
-					player.frame = 9;
-					var disappears = game.add.tween(player.scale).to({x:0.7, y:0.7}).start();
-					disappears.onComplete.addOnce(levelCompleted);
-					game.udoExiting = true;
-				}
-			}
-
+			updateRoutine();
 			if (game.nextLevel) {
 				click2start('play2');
 			}
-
 		}
 	};
 
@@ -302,7 +313,10 @@
 
 		create: function() {
 			resetLevel();
-			setupGameWorld(1024, 800, 'daytime');
+			setupGameWorld(1024, 800, 'daytime', [{'x': -150, 'y': 320, 'type': "ground"},
+		                                          {'x':  400, 'y': 470, 'type': "ground"},
+												  {'x':  150, 'y': 600, 'type': "ground"},
+											  ]);
 		    setupGate();
 			setupUdo();
 			setupCamera();
@@ -313,58 +327,39 @@
 		},
 
 		update: function() {
-
-			game.physics.arcade.collide(player, platforms);
-
-			if (!game.nowExit) {
-				//  Collide the player and the docs with the platforms
-			    game.physics.arcade.collide(docs, platforms);
-
-			    //  Checks to see if the player overlaps with any of the docs, if he does call the collectDoc function
-			    game.physics.arcade.overlap(player, docs, collectDoc, null, this);
-
-				//game.physics.arcade.collide(player, gate);
-				game.physics.arcade.overlap(player, gate, endLevelCb, ifUdoMiddleDoor, this);
-
-			    //  Reset the players velocity (movement)
-			    player.body.velocity.x = 0;
-
-				//  Allow the player to jump if they are touching the ground.
-			    if (cursors.up.isDown && player.body.touching.down)
-			    {
-			        player.body.velocity.y = -350;
-					audioJump.play();
-			    }
-
-			    if (cursors.left.isDown)
-			    {
-			        //  Move to the left
-			        player.body.velocity.x = -150;
-			        player.animations.play('left');
-			    }
-			    else if (cursors.right.isDown)
-			    {
-			        //  Move to the right
-			        player.body.velocity.x = 150;
-			        player.animations.play('right');
-			    }
-			    else
-			    {
-			        //  Stand still
-			        player.animations.stop();
-			        player.frame = 4;
-			    }
+			updateRoutine();
+			if (game.nextLevel) {
+				click2start('play3');
 			}
-			else {
-				if(!game.udoExiting) {
-					player.animations.stop();
-					player.frame = 9;
-					var disappears = game.add.tween(player.scale).to({x:0.7, y:0.7}).start();
-					disappears.onComplete.addOnce(levelCompleted);
-					game.udoExiting = true;
-				}
-			}
+		}
+	};
 
+	var statePlay3 = {
+
+		create: function() {
+			resetLevel();
+			setupGameWorld(1500, 990, 'night', [{'x':  -80, 'y': 110, 'type': "ground"},
+												{'x':   350, 'y': 250, 'type': "ground"},
+												{'x':   200, 'y': 400, 'type': "ground"},
+		                                        {'x':   520, 'y': 500, 'type': "ground"},
+												{'x':   770, 'y': 500, 'type': "ground"},
+												{'x':  1220, 'y': 650, 'type': "ground"},
+												{'x':   820, 'y': 800, 'type': "ground"}
+											  ]);
+		    setupGate();
+			setupUdo();
+			setupCamera();
+			setupDocs();
+			setupText();
+			setupAudio();
+			setupControls();
+		},
+
+		update: function() {
+			updateRoutine();
+			if (game.nextLevel) {
+				//click2start('play3');
+			}
 		}
 	};
 
@@ -373,6 +368,7 @@
 	game.state.add('intro', stateIntro);
 	game.state.add('play1', statePlay1);
 	game.state.add('play2', statePlay2);
+	game.state.add('play3', statePlay3);
 
 	game.state.start('load');
 
