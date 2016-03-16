@@ -10,6 +10,8 @@
     var scoreGlobal = 0;
     var scoreText;
     var docText;
+    var virtualInput = {right: false, left: false, up: false, down: false};
+    var virtualInputTm;
 
     var docTitles = ['Project charter', 'Operation Manual', ' Risk Analysis',
         'Project plan', 'Budget'
@@ -24,8 +26,93 @@
         bugs = 0;
     }
 
+    function onTap(pointer, doubleTap) {
+        if (player) {
+            clearTimeout(virtualInputTm);
+            if (!doubleTap) {
+                if (pointer.x > (player.x + 20)) {
+                    virtualInput.right = true;
+                    virtualInput.left = false;
+                }
+                else if (pointer.x < (player.x - 20)) {
+                    virtualInput.left = true;
+                    virtualInput.right = false;
+                }
+                else {
+                    virtualInput.left = false;
+                    virtualInput.right = false;
+                }
+            }
+            else {
+                virtualInput.up = true;
+            }
+            virtualInputTm = setTimeout(function(){
+                virtualInput.left = false;
+                virtualInput.right = false;
+                virtualInput.up = false;
+
+            }, 200);
+        }
+        else {
+            virtualInput.up = true;
+        }
+    }
+
+    function onHold (pointer) {
+        if (player) {
+            if (pointer.x > (player.x + 20)) {
+                virtualInput.target = pointer.x;
+                virtualInput.right = true;
+                virtualInput.left = false;
+            }
+            else if (pointer.x < (player.x - 20)) {
+                virtualInput.target = pointer.x;
+                virtualInput.left = true;
+                virtualInput.right = false;
+            }
+        }
+    }
+
+    function mergedInputs() {
+        var mergedInput = {};
+        if (player) {
+            if(virtualInput.hasOwnProperty('target')) {
+                if (player.x < (virtualInput.target - 10)) {
+                    mergedInput.left = false;
+                    mergedInput.right = true;
+                }
+                else if (player.x > (virtualInput.target + 10)) {
+                    mergedInput.left = true;
+                    mergedInput.right = false;
+                }
+                else {
+                    mergedInput.left = false;
+                    mergedInput.right = false;
+                    delete(virtualInput.target)
+                }
+            }
+        }
+        mergedInput.left = virtualInput.left | cursors.left.isDown;
+        mergedInput.right = virtualInput.right | cursors.right.isDown;
+        mergedInput.up = virtualInput.up | cursors.up.isDown;
+        return mergedInput;
+    }
+
+    function click2start(level) {
+        var control = mergedInputs();
+        if (control.left || control.right ||
+            control.up) {
+            game.state.start(level);
+        }
+    }
+
     function setupControls() {
         cursors = game.input.keyboard.createCursorKeys();
+        game.input.onTap.add(onTap, this);
+        game.input.onHold.add(onHold, this);
+        virtualInput.left = false;
+        virtualInput.right = false;
+        virtualInput.up = false;
     }
 
     var stateLoad = {
@@ -52,7 +139,7 @@
             game.load.audio('open', 'assets/open.mp3');
             game.load.audio('gling', 'assets/gling.mp3');
             game.load.audio('win', 'assets/win.mp3');
-            setupControls();
+            //setupControls();
         },
 
         create: function() {
@@ -60,17 +147,11 @@
         }
     };
 
-    function click2start(level) {
-        if (cursors.left.isDown || cursors.right.isDown ||
-            cursors.down.isDown || cursors.up.isDown) {
-            game.state.start(level);
-        }
-    }
-
 
     var stateIntro = {
         create: function() {
             game.add.sprite(0, 0, 'udo-bg');
+            setupControls();
         },
 
         update: function() {
@@ -320,7 +401,12 @@
       }
     }
 
+
+
     function updateRoutine() {
+
+        var control = mergedInputs();
+
         game.physics.arcade.collide(player, platforms);
 
         if (!game.nowExit) {
@@ -340,16 +426,16 @@
             player.body.velocity.x = 0;
 
             //  Allow the player to jump if they are touching the ground.
-            if (cursors.up.isDown && player.body.touching.down) {
+            if (control.up && player.body.touching.down) {
                 player.body.velocity.y = -350;
                 audioJump.play();
             }
 
-            if (cursors.left.isDown) {
+            if (control.left) {
                 //  Move to the left
                 player.body.velocity.x = -150;
                 player.animations.play('left');
-            } else if (cursors.right.isDown) {
+            } else if (control.right) {
                 //  Move to the right
                 player.body.velocity.x = 150;
                 player.animations.play('right');
@@ -391,7 +477,7 @@
             setupText();
             setupAudio();
             addScoreGlobal(0);
-            //setupControls();
+            setupControls();
         },
 
         update: function() {
@@ -428,7 +514,7 @@
             setupText();
             setupAudio();
             addScoreGlobal(0);
-            //setupControls();
+            setupControls();
         },
 
         update: function() {
@@ -480,7 +566,7 @@
             setupText();
             setupAudio();
             addScoreGlobal(0);
-            //setupControls();
+            setupControls();
         },
 
         update: function() {
