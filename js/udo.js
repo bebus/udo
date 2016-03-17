@@ -27,14 +27,16 @@
     }
 
     function onTap(pointer, doubleTap) {
+      var tapx = pointer.positionDown.x + game.camera.x;
+      var tapy = pointer.positionDown.y + game.camera.y;
         if (player) {
             clearTimeout(virtualInputTm);
-            if (!doubleTap) {
-                if (pointer.x > (player.x + 20)) {
+            //if (!doubleTap) {
+                if (tapx > (player.x + 20)) {
                     virtualInput.right = true;
                     virtualInput.left = false;
                 }
-                else if (pointer.x < (player.x - 20)) {
+                else if (tapx < (player.x - 20)) {
                     virtualInput.left = true;
                     virtualInput.right = false;
                 }
@@ -42,34 +44,22 @@
                     virtualInput.left = false;
                     virtualInput.right = false;
                 }
+            //}
+            if (tapy < player.y) {
+              virtualInput.up = true;
             }
             else {
-                virtualInput.up = true;
+              virtualInput.up = false;
             }
             virtualInputTm = setTimeout(function(){
                 virtualInput.left = false;
                 virtualInput.right = false;
                 virtualInput.up = false;
 
-            }, 200);
+            }, 1000);
         }
         else {
             virtualInput.up = true;
-        }
-    }
-
-    function onHold (pointer) {
-        if (player) {
-            if (pointer.x > (player.x + 20)) {
-                virtualInput.target = pointer.x;
-                virtualInput.right = true;
-                virtualInput.left = false;
-            }
-            else if (pointer.x < (player.x - 20)) {
-                virtualInput.target = pointer.x;
-                virtualInput.left = true;
-                virtualInput.right = false;
-            }
         }
     }
 
@@ -109,7 +99,7 @@
     function setupControls() {
         cursors = game.input.keyboard.createCursorKeys();
         game.input.onTap.add(onTap, this);
-        game.input.onHold.add(onHold, this);
+
         virtualInput.left = false;
         virtualInput.right = false;
         virtualInput.up = false;
